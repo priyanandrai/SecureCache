@@ -9,9 +9,10 @@ import org.apache.commons.lang3.SerializationUtils;
 import com.securecache.JumbleFunction.StringLogic;
 import com.securecache.JumbleFunction.Stringmagic;
 import com.securecache.JumbleFunction.Stringtrick;
+import com.securecache.Loader.SourcesLoader;
 import com.securecache.cipher.Cipher;
 import com.securecache.secureinterface.JumbleFunctionInterface;
-import com.securecache.secureinterface.Sources;
+
 
 /**
  * 
@@ -19,23 +20,23 @@ import com.securecache.secureinterface.Sources;
  * @param <K> the type of keys maintained by Secure Cache
  * @param <V> the type of mapped values
  */
-public class SecureCache<K,V> {
+public class SecureCache<Key,Value> {
 
 	/**
 	 * 
 	 */
-	Sources<K,V> sources = null;
+	SourcesLoader<Key,Value> sources = null;
 
 	Cipher cipher = new Cipher();
 
-	HashMap<K, byte[]> hashMap = new HashMap<K, byte[]>();
+	HashMap<Key,byte[]> hashMap = new HashMap<Key, byte[]>();
 
 	ArrayList<JumbleFunctionInterface> jumbleFunctions;
 
 	/**
 	 * @param sources it provide call back to key , if user want load value at run time.
 	 */
-	public SecureCache(Sources<K,V> sources) {
+	private  SecureCache(SourcesLoader<Key,Value> sources) {
 
 		this.sources = sources;
 
@@ -51,6 +52,7 @@ public class SecureCache<K,V> {
 				add (new Stringtrick());
 			}};
 	}
+	
 
 	/*
 	 * Default constructor , default jumble function will use. 
@@ -78,7 +80,7 @@ public class SecureCache<K,V> {
 	}
 	
 
-	public void put(K key, V value) {
+	public void put(Key key, Value value) {
 		try {
 			if(value != null) {
 				hashMap.put(key, cipher.protectData(SerializationUtils.serialize((Serializable) value), jumbleFunctions));
@@ -96,9 +98,9 @@ public class SecureCache<K,V> {
 	 * @return will return plain value in respect to Key 
 	 * 
 	 */
-	public synchronized V get(K key) {
+	public synchronized Value get(Key key) {
 		try {
-			V value = null;
+			Value value = null;
 			byte[] secureText  =  hashMap.get(key);
 			if(secureText == null) {
 
@@ -114,7 +116,6 @@ public class SecureCache<K,V> {
 					
 					//
 					if(value != null) {
-						System.out.println("t "+ value.getClass().getName());
 						hashMap.put(key, cipher.protectData(SerializationUtils.serialize((Serializable) value), jumbleFunctions));
 					}
 
@@ -136,4 +137,24 @@ public class SecureCache<K,V> {
 
 
 	}
+	
+	public static class SecureCacheBuilder<Key, Value>{
+		SourcesLoader< Key, Value> loader;
+		
+		  public SecureCacheBuilder<Key, Value> Loader(SourcesLoader< Key, Value> loader) {
+	            this.loader = loader;
+	            return this;
+	        }
+
+
+		public   SecureCache<Key, Value> build() {
+			// TODO Auto-generated method stub
+			return new SecureCache<Key, Value>(loader);
+		}
+
+	}
+
+
 }
+
+

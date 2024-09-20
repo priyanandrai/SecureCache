@@ -1,4 +1,4 @@
-package com.securecache.secureinterface;
+package com.securecache.Loader;
 
 import java.io.Serializable;
 
@@ -8,7 +8,7 @@ import java.io.Serializable;
  *
  * @param <T> this is value return by call back function for storing value with respect with Key 
  */
-public abstract class Sources<K, V> implements Serializable {
+public abstract class SourcesLoader<Key, Value> implements Serializable {
 
 	/**
 	 * 
@@ -17,8 +17,8 @@ public abstract class Sources<K, V> implements Serializable {
 
 	/**
 	 * 
-	 * @param v return value regarding the key to Store
+	 * @param Value return value regarding the key to Store
 	 * @return
 	 */
-	public abstract V loadValue(K v);
+	public abstract Value loadValue(Key k);
 }
