@@ -2,20 +2,46 @@
 
 ## Supported Versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+| Version | Supported |
+| ------- | --------- |
+| 0.0.1-SNAPSHOT (current) | ✅ |
+| Earlier builds | ❌ |
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+This project is in active development. Only the latest source on the `main` branch receives security fixes.
+
+## Cryptographic Design
+
+SecureCache implements the **Dynamic Key Camouflage Encryption** model (IJFMR260271936).
+Key security properties of the current implementation:
+
+| Property | Detail |
+|---|---|
+| Encryption algorithm | AES/GCM/NoPadding (authenticated encryption) |
+| Key size | 256-bit, runtime-generated per cache entry |
+| Key derivation | PBKDF2WithHmacSHA256 |
+| IV | 12-byte random per entry via `SecureRandom` |
+| Key storage | None — key is XOR-bound to SHA-256(ciphertext) inside the blob |
+| Tamper detection | GCM authentication tag (128-bit) rejects any modified ciphertext |
+| Structural obfuscation | Multi-stage jumbling (up to 3 of 12 reversible functions) |
 
 ## Reporting a Vulnerability
 
-Use this section to tell people how to report a vulnerability.
+**Do NOT open a public GitHub issue for security vulnerabilities.**
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+Report all security issues privately by email to:
+
+**amitrai5100@gmail.com**
+
+Please include:
+- A clear description of the vulnerability
+- Steps to reproduce or a proof-of-concept
+- Affected version / commit hash
+- Potential impact assessment
+
+You can expect an acknowledgement within **72 hours** and a patch or mitigation plan within **14 days** for confirmed issues.
+
+## Known Limitations (per paper §9)
+
+- Security partially depends on algorithm secrecy (security-through-obscurity layer in jumbling)
+- Structural obfuscation must avoid predictable patterns — custom jumble functions should be reviewed carefully
+- Formal cryptographic proofs are outside the current scope; see paper §10 for future work
