@@ -2,15 +2,24 @@ package com.securecache.main;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.HashMap;
 
 import org.apache.commons.lang3.SerializationUtils;
 
 import com.securecache.JumbleFunction.StringLogic;
 import com.securecache.JumbleFunction.Stringmagic;
 import com.securecache.JumbleFunction.Stringtrick;
+import com.securecache.JumbleFunction.CircularRotationJumble;
+import com.securecache.JumbleFunction.EvenOddJumble;
+import com.securecache.JumbleFunction.XorMaskJumble;
+import com.securecache.JumbleFunction.NibbleSwapJumble;
+import com.securecache.JumbleFunction.ByteInversionJumble;
+import com.securecache.JumbleFunction.PairSwapJumble;
+import com.securecache.JumbleFunction.TriBlockJumble;
+import com.securecache.JumbleFunction.InterleaveJumble;
+import com.securecache.JumbleFunction.CaesarByteJumble;
 import com.securecache.Loader.SourcesLoader;
 import com.securecache.cipher.Cipher;
+import com.securecache.dataHandler.TimeBasedHashMap;
 import com.securecache.secureinterface.JumbleFunctionInterface;
 
 
@@ -28,10 +37,26 @@ public class SecureCache<Key,Value> {
 	SourcesLoader<Key,Value> sources = null;
 
 	Cipher cipher = new Cipher();
-
-	HashMap<Key,byte[]> hashMap = new HashMap<Key, byte[]>();
+	TimeBasedHashMap<Key, byte[]> hashMap = null;
 
 	ArrayList<JumbleFunctionInterface> jumbleFunctions;
+
+	private static ArrayList<JumbleFunctionInterface> buildDefaultJumbleFunctions() {
+		ArrayList<JumbleFunctionInterface> list = new ArrayList<JumbleFunctionInterface>();
+		list.add(new Stringmagic());            // F0  – Identity
+		list.add(new StringLogic());            // F1  – Block Swap
+		list.add(new Stringtrick());            // F2  – Byte Reversal
+		list.add(new CircularRotationJumble()); // F3  – Circular Rotation (left by 3)
+		list.add(new EvenOddJumble());          // F4  – Even-Odd Permutation
+		list.add(new XorMaskJumble());          // F5  – XOR Masking (index-based)
+		list.add(new NibbleSwapJumble());       // F6  – Nibble Swap
+		list.add(new ByteInversionJumble());    // F7  – Byte Inversion (bitwise NOT)
+		list.add(new PairSwapJumble());         // F8  – Adjacent Pair Swap
+		list.add(new TriBlockJumble());         // F9  – Tri-Block Rotation
+		list.add(new InterleaveJumble());       // F10 – Interleave Halves
+		list.add(new CaesarByteJumble());       // F11 – Caesar Byte Shift (shift=83)
+		return list;
+	}
 
 	/**
 	 * @param sources it provide call back to key , if user want load value at run time.
@@ -39,18 +64,8 @@ public class SecureCache<Key,Value> {
 	private  SecureCache(SourcesLoader<Key,Value> sources) {
 
 		this.sources = sources;
-
-		jumbleFunctions = new ArrayList<JumbleFunctionInterface>() {
-			/**
-			 * -
-			 */
-			private static final long serialVersionUID = 1L;
-
-			{
-				add(new Stringmagic());
-				add(new StringLogic());
-				add (new Stringtrick());
-			}};
+		this.hashMap = new TimeBasedHashMap<>(10000000);
+		jumbleFunctions = buildDefaultJumbleFunctions();
 	}
 	
 
@@ -59,17 +74,8 @@ public class SecureCache<Key,Value> {
 	 */
 
 	public SecureCache() {
-		jumbleFunctions = new ArrayList<JumbleFunctionInterface>() {
-			/**
-			 * 
-			 */
-			private static final long serialVersionUID = 1L;
-
-			{
-				add(new Stringmagic());
-				add(new StringLogic());
-				add (new Stringtrick());
-			}};
+		this.hashMap = new TimeBasedHashMap<>(10000000);
+		jumbleFunctions = buildDefaultJumbleFunctions();
 	}
 
 	/*
@@ -80,10 +86,10 @@ public class SecureCache<Key,Value> {
 	}
 	
 
-	public void put(Key key, Value value) {
+	public synchronized void put(Key key, Value value) {
 		try {
 			if(value != null) {
-				hashMap.put(key, cipher.protectData(SerializationUtils.serialize((Serializable) value), jumbleFunctions));
+				hashMap.putValue(key, cipher.protectData(SerializationUtils.serialize((Serializable) value), jumbleFunctions));
 			}
 			
 		} catch (Exception e) {
@@ -101,7 +107,7 @@ public class SecureCache<Key,Value> {
 	public synchronized Value get(Key key) {
 		try {
 			Value value = null;
-			byte[] secureText  =  hashMap.get(key);
+			byte[] secureText  =  hashMap.getValue(key);
 			if(secureText == null) {
 
 				if(sources == null) {
@@ -116,7 +122,7 @@ public class SecureCache<Key,Value> {
 					
 					//
 					if(value != null) {
-						hashMap.put(key, cipher.protectData(SerializationUtils.serialize((Serializable) value), jumbleFunctions));
+						hashMap.putValue(key, cipher.protectData(SerializationUtils.serialize((Serializable) value), jumbleFunctions));
 					}
 
 				}
@@ -138,11 +144,27 @@ public class SecureCache<Key,Value> {
 
 	}
 	
+	/**
+	 * 
+	 * @param key key to store data in map 
+	 * @return will return plain value in respect to Key 
+	 * 
+	 */
+	public synchronized boolean remove(Key key) {
+		byte[] data = hashMap.removeValue(key);
+		if(data == null) {
+			return false;
+		}else {
+			return true;
+		}
+	}
+	
 	public static class SecureCacheBuilder<Key, Value>{
 		SourcesLoader< Key, Value> loader;
 		
 		  public SecureCacheBuilder<Key, Value> Loader(SourcesLoader< Key, Value> loader) {
 	            this.loader = loader;
+	            
 	            return this;
 	        }
 

@@ -1,113 +1,154 @@
 package com.securecache.cipher;
 
 import java.nio.ByteBuffer;
+import java.security.GeneralSecurityException;
 import java.security.InvalidKeyException;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.security.spec.InvalidKeySpecException;
 import java.util.ArrayList;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
 import com.securecache.main.Constant;
 import com.securecache.secureinterface.JumbleFunctionInterface;
-import com.securecache.utility.Utils;
 
 public class Cipher {
+	private static final int GCM_TAG_LENGTH_BITS = 128;
+	private static final int GCM_IV_LENGTH_BYTES = 12;
+	private static final int MAX_JUMBLE_STAGES = 3;
+
 	KeyGenerator genrator = new KeyGenerator();
+	SecureRandom secureRandom = new SecureRandom();
 
-	public byte[] revealData(byte[] v,  ArrayList<JumbleFunctionInterface> jumbleFunctions) throws InvalidKeySpecException, NoSuchAlgorithmException, IllegalBlockSizeException, BadPaddingException, InvalidKeyException, NoSuchPaddingException {
-		byte[][] part = divideArray(v, 2);
-		//TODO Need to validate key Size and Operation , current we are sopporting Key Size of 32(256)
-
-		int keySize = Integer.parseInt(new String(part[0]));
-		byte[] encode = new byte[keySize];
-
-		part = divideArray(part[1], 1);
-
-
-		part = divideArray(part[1], Integer.parseInt(new String(part[0])));
-
-		int KeyStartingIndex = Integer.parseInt(new String(part[0]));
-		part = divideArray(part[1],KeyStartingIndex );
-
-
-		System.arraycopy(part[1], 0  , encode, 0  , encode.length);
-
-
-		byte[] firstPart = divideArray(part[0], KeyStartingIndex)[0];
-
-
-		byte[] secondPart = divideArray(part[1], 0 + encode.length)[1];
-
-		byte[] finalData = Utils.combineAllArray(firstPart, secondPart);
-
-		SecretKeySpec key = genrator.getKey(encode);
-		part = divideArray(finalData,1 );
-
-
-		byte[] dataTorestore = 	jumbleFunctions.get(Integer.parseInt(new String(part[0]))).Reassbamble(part[1]);
-
-		javax.crypto.Cipher cipher = javax.crypto.Cipher.getInstance("AES");
-		cipher.init(javax.crypto.Cipher.DECRYPT_MODE, key);
-		byte[] revealText = cipher.doFinal(dataTorestore);
-
-		return revealText;
-	} 
-	public byte[] protectData(byte[] v, ArrayList<JumbleFunctionInterface> jumbleFunctions) throws InvalidKeySpecException, NoSuchAlgorithmException, IllegalBlockSizeException, BadPaddingException, InvalidKeyException, NoSuchPaddingException {
-		try {
-
-			SecretKeySpec key = genrator.getKey();
-
-			javax.crypto.Cipher cipher = javax.crypto.Cipher.getInstance("AES");
-
-			cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, key);
-
-			byte[] cipherText = cipher.doFinal(v);
-
-			int index = Utils.getRandomNumber(0, jumbleFunctions.size());//
-
-			byte[] toReturnData =  jumbleFunctions.get(index).JumbleData(cipherText);
-
-			byte [] hbhbytes = (index+"").getBytes();
-
-			toReturnData = Utils.combineAllArray(hbhbytes,toReturnData);
-
-
-			index = Utils.getRandomNumber(0, toReturnData.length);
-
-			return creatMagicData(toReturnData,index, key.getEncoded() , Constant.KeyLength );
-
-		} catch (Exception e) {
-			e.printStackTrace();
+	public byte[] revealData(byte[] blob, ArrayList<JumbleFunctionInterface> jumbleFunctions)
+			throws InvalidKeySpecException, NoSuchAlgorithmException, IllegalBlockSizeException, BadPaddingException,
+			InvalidKeyException, NoSuchPaddingException {
+		if (blob == null || jumbleFunctions == null || jumbleFunctions.isEmpty()) {
 			return null;
 		}
 
+		ByteBuffer envelope = ByteBuffer.wrap(blob);
+		int version = Byte.toUnsignedInt(envelope.get());
+		if (version != Constant.CACHE_VERSION) {
+			throw new IllegalArgumentException("Unsupported cipher envelope version: " + version);
+		}
 
+		int stageCount = Byte.toUnsignedInt(envelope.get());
+		byte[] stageSequence = new byte[stageCount];
+		envelope.get(stageSequence);
+
+		int ivLength = Byte.toUnsignedInt(envelope.get());
+		byte[] iv = new byte[ivLength];
+		envelope.get(iv);
+
+		int payloadLength = envelope.getInt();
+		if (payloadLength < 0 || payloadLength > envelope.remaining()) {
+			throw new IllegalArgumentException("Invalid payload length in envelope");
+		}
+
+		byte[] payload = new byte[payloadLength];
+		envelope.get(payload);
+
+		for (int i = stageCount - 1; i >= 0; i--) {
+			int functionIndex = Byte.toUnsignedInt(stageSequence[i]);
+			payload = jumbleFunctions.get(functionIndex).reassemble(payload);
+		}
+
+		ByteBuffer frame = ByteBuffer.wrap(payload);
+		int cipherLength = frame.getInt();
+		if (cipherLength < 0 || cipherLength > frame.remaining()) {
+			throw new IllegalArgumentException("Invalid ciphertext length in payload");
+		}
+
+		byte[] cipherText = new byte[cipherLength];
+		frame.get(cipherText);
+
+		int hiddenKeyLength = frame.remaining();
+		if (hiddenKeyLength != Constant.KEY_LENGTH) {
+			throw new IllegalArgumentException("Invalid hidden key length in payload");
+		}
+
+		byte[] hiddenKey = new byte[hiddenKeyLength];
+		frame.get(hiddenKey);
+
+		byte[] recoveredKey = xorBytes(hiddenKey, sha256(cipherText));
+		SecretKeySpec key = genrator.getKey(recoveredKey);
+
+		try {
+			javax.crypto.Cipher cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");
+			cipher.init(javax.crypto.Cipher.DECRYPT_MODE, key, new GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv));
+			return cipher.doFinal(cipherText);
+		} catch (GeneralSecurityException e) {
+			throw new InvalidKeyException("Unable to decrypt payload", e);
+		}
 	}
-	private byte[] creatMagicData(byte[] toReturnData, int index, byte[] encoded, int keyLength) throws Exception{
 
-		byte[][] part = divideArray(toReturnData, index);
+	public byte[] protectData(byte[] value, ArrayList<JumbleFunctionInterface> jumbleFunctions)
+			throws InvalidKeySpecException, NoSuchAlgorithmException, IllegalBlockSizeException, BadPaddingException,
+			InvalidKeyException, NoSuchPaddingException {
+		if (value == null || jumbleFunctions == null || jumbleFunctions.isEmpty()) {
+			return null;
+		}
 
-		byte[] part1 = part[0];
-		byte[] part2 = part[1];
+		SecretKeySpec key = genrator.getKey();
+		byte[] iv = new byte[GCM_IV_LENGTH_BYTES];
+		secureRandom.nextBytes(iv);
 
-		return  Utils.combineAllArray((keyLength+"").getBytes(),((index+"").length()+"").getBytes(),(index+"").getBytes(),part1,encoded, part2);
+		byte[] cipherText;
+		try {
+			javax.crypto.Cipher cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");
+			cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv));
+			cipherText = cipher.doFinal(value);
+		} catch (GeneralSecurityException e) {
+			throw new InvalidKeyException("Unable to encrypt payload", e);
+		}
 
+		byte[] hiddenKey = xorBytes(key.getEncoded(), sha256(cipherText));
+		ByteBuffer frame = ByteBuffer.allocate(4 + cipherText.length + hiddenKey.length);
+		frame.putInt(cipherText.length);
+		frame.put(cipherText);
+		frame.put(hiddenKey);
+		byte[] payload = frame.array();
 
-	} 
+		int stageCount = Math.min(MAX_JUMBLE_STAGES, jumbleFunctions.size());
+		byte[] stageSequence = new byte[stageCount];
+		for (int i = 0; i < stageCount; i++) {
+			int functionIndex = secureRandom.nextInt(jumbleFunctions.size());
+			stageSequence[i] = (byte) functionIndex;
+			payload = jumbleFunctions.get(functionIndex).jumbleData(payload);
+		}
 
-	private byte[][] divideArray(byte[] toReturnData, int index){
-		byte[][] bs = new byte[2][];
-		bs[0] = new byte[index];
-		bs[1] = new byte[toReturnData.length-index];
+		ByteBuffer envelope = ByteBuffer
+				.allocate(1 + 1 + stageSequence.length + 1 + iv.length + 4 + payload.length);
+		envelope.put((byte) Constant.CACHE_VERSION);
+		envelope.put((byte) stageSequence.length);
+		envelope.put(stageSequence);
+		envelope.put((byte) iv.length);
+		envelope.put(iv);
+		envelope.putInt(payload.length);
+		envelope.put(payload);
 
-		System.arraycopy(toReturnData, 0           , bs[0], 0     , bs[0].length);
-		System.arraycopy(toReturnData, bs[0].length, bs[1], 0     , bs[1].length);
+		return envelope.array();
+	}
 
-		return bs;
+	private byte[] sha256(byte[] data) throws NoSuchAlgorithmException {
+		MessageDigest digest = MessageDigest.getInstance("SHA-256");
+		return digest.digest(data);
+	}
+
+	private byte[] xorBytes(byte[] left, byte[] right) {
+		int size = Math.min(left.length, right.length);
+		byte[] output = new byte[size];
+		for (int i = 0; i < size; i++) {
+			output[i] = (byte) (left[i] ^ right[i]);
+		}
+		return output;
 	}
 }
 

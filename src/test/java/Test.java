@@ -1,6 +1,5 @@
 import com.securecache.Loader.SourcesLoader;
 import com.securecache.main.SecureCache;
-import com.securecache.main.SecureCache.SecureCacheBuilder;
 
 
 public class Test {

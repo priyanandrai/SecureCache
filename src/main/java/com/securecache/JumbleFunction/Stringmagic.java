@@ -4,11 +4,13 @@ import com.securecache.secureinterface.JumbleFunctionInterface;
 
 public class Stringmagic  implements JumbleFunctionInterface{
 
-	public byte[] JumbleData(byte[] data) {
+	@Override
+	public byte[] jumbleData(byte[] data) {
 		 return data;
 	}
 
-	public byte[] Reassbamble(byte[] data) {
+	@Override
+	public byte[] reassemble(byte[] data) {
 		 return data;
 	}
 

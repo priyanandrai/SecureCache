@@ -5,7 +5,7 @@ import com.securecache.secureinterface.JumbleFunctionInterface;
 public class Stringtrick implements JumbleFunctionInterface {
 
 	@Override
-	public byte[] JumbleData(byte[] array) {
+	public byte[] jumbleData(byte[] array) {
 		
 		 if (array == null) {
 	          return array;
@@ -25,7 +25,7 @@ public class Stringtrick implements JumbleFunctionInterface {
 	}
 
 	@Override
-	public byte[] Reassbamble(byte[] array) {
+	public byte[] reassemble(byte[] array) {
 		if (array == null) {
 			return array;
 		}

@@ -1,38 +1,36 @@
 ---
 name: Bug report
-about: Create a report to help us improve
-title: ''
-labels: ''
+about: Report a defect in SecureCache encryption, caching, or API behaviour
+title: '[BUG] '
+labels: 'bug'
 assignees: ''
-
 ---
 
 **Describe the bug**
 A clear and concise description of what the bug is.
 
+**SecureCache version / commit**
+e.g. `0.0.1-SNAPSHOT` · commit `abc1234`
+
 **To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+Minimal code snippet that reproduces the issue:
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+```java
+SecureCache<String, byte[]> cache = new SecureCache<>();
+cache.put("key", value);
+byte[] result = cache.get("key"); // unexpected behaviour here
+```
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+**Expected behaviour**
+What you expected to happen.
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+**Actual behaviour**
+What actually happened (stack trace, wrong value, null, etc.).
 
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+**Environment**
+- OS: e.g. Ubuntu 22.04 / Windows 11
+- Java version: e.g. OpenJDK 8u392
+- Maven version: e.g. 3.9.6
 
 **Additional context**
-Add any other context about the problem here.
+Any other relevant information (custom jumble functions, loader usage, TTL config, etc.).
